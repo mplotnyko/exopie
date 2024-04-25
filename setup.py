@@ -9,9 +9,7 @@ setup(
     include_package_data=True,
     python_requires=">=3.6",
     install_requires=[
-        "corner",
         "numpy",
-        "pandas",
         "scipy"
     ],
 )
