@@ -1,7 +1,0 @@
-Metadata-Version: 2.1
-Name: exopie
-Version: 1.0
-Requires-Python: >=3.6
-License-File: LICENSE
-Requires-Dist: numpy
-Requires-Dist: scipy
