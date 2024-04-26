@@ -1,21 +1,16 @@
 def sigma_cmf(M,R,dM,dR):
     '''
-    Analytical function to find ..
-    Eq 2 in the paper Pl & Valencia 2023
+    Analytical function to find the error in core mass fraction.
     '''
     M = M*5.97219e24
     R = R*6.371e6
     rho_bulk = M/(4/3*np.pi*R**3)/1e3
-    # find_rho = lambda rho:  (cmf - (rho[1]/rho[0] - (rho[1]/rho_bulk)) / (rho[1]/rho[0] - 1))**2
-    # res = optimize.minimize(find_rho,[3,10],bounds=[[3,8],[7,30]]) # rho = rho_m,rho_c
-    # rho_m,rho_c = res.x
     rho_m,rho_c = 5,10
     return (rho_c/rho_bulk)*np.sqrt(9*dR**2+dM**2)/(rho_c / rho_m - 1)
 
 def delta_cmf(M,R,dM,dR):
     '''
-    Analytical function to find ..
-    Eq 2 in the paper Pl & Valencia 2023
+    Analytical function to find difference in core mass fraction.
     '''
     rho_m,rho_c = 5,10
     rho_bulk = M*5.97219e24/(4/3*np.pi*(R*6.371e6)**3)/1e3 
@@ -24,7 +19,31 @@ def delta_cmf(M,R,dM,dR):
 def chemistry(cmf,xSi=0,xFe=0.1,trace_core=0.02,
                 xNi=None,xAl=0.04,xCa=0.05,xWu=0.2):
     '''
+    Calculate the interior chemistry of a planet.
+
+    Parameters:
+    ----------
+    cmf: float or array
+        Core mass fraction.
+    xSi: float or array
+        Molar fraction of silicon in the core.
+    xFe: float or array
+        Molar fraction of iron in the mantle.
+    trace_core: float or array
+        Molar fraction of trace metals in the core.
+    xNi: float or array
+        Molar fraction of nickel in the core. If None, assume Fe/Ni ratio is 16.
+    xAl: float or array
+        Molar fraction of aluminum in the mantle.
+    xCa: float or array
+        Molar fraction of calcium in the mantle.
+    xWu: float or array
+        Molar fraction of wustite in the mantle.
     
+    Returns:
+    --------
+    FeMF, SiMF, MgMF: list
+        Mass fractions of Fe, Si, and Mg.
     '''
     mmf = 1-cmf # mantle mass fraction
     xPv = 1-xWu-xCa #molar fraction of porovskite in the mantle
@@ -49,6 +68,20 @@ def chemistry(cmf,xSi=0,xFe=0.1,trace_core=0.02,
     return fe_mass,si_mass,mg_mass
     
 def magnisium_number(xFe,xWu,xCa,xAl):
+    '''
+    Calculate the magnesium number in the mantle.
+
+    Parameters:
+    ----------
+    xFe: float
+        Molar fraction of iron in the mantle.
+    xWu: float
+        Molar fraction of wustite in the mantle.
+    xCa: float
+        Molar fraction of calcium in the mantle.
+    xAl: float
+        Molar fraction of aluminum in the mantle.
+    '''
     xPv = 1-xWu-xCa # calculate the mole fraction of Pv
     Fe_m = xPv*xFe+xWu*xFe #moles of Fe
     Mg_m = xPv*(1-xFe-xAl)+xWu*(1-xFe) #moles of Mg

@@ -5,6 +5,9 @@ from scipy.optimize import minimize
 
 
 class planet_property:
+    '''
+    Initialize properties of a planet.
+    '''
     def __init__(self, N=50000, Mass=None, Radius=None, CMF=None, FeMF=None, WMF=None, xSi=None, xFe=None, atm_height=None):
         self._N = N
         self._Mass = np.array(Mass)
@@ -71,25 +74,49 @@ class planet_property:
 
 class exoplanet(planet_property):
     '''
-    Find interior structure errors (cmf, Fe-mf) for a given exoplanet. 
-    This code uses data from an interior structure model SUPEREARTH 
-    deveopled by Valencia et al. 2006 and updated in Plotnykov & Valencia 2020.
-    Interpolating the data, we construct a fit to find radius given mass and 
-    interior parameters (cmf, wmf, xSi, xFe) of a planet.
-    The methodoly is described in Plotnykov & Valencia 2024.
+    Calculate the interior structure parameters (CMF, Fe-MF, WMF) for a given exoplanet 
+    using the SUPEREARTH interior structure model developed by Valencia et al. (2006) 
+    and updated in Plotnykov & Valencia (2020). 
 
-    Parameters
-    ----------
-    Mass: real
-        Mass of the planet in Earth masses. Valid only in range [0.1,10].
-    Radius: real
-        Radius of the planet in Earth radii.
-    Mass_error: list
-        Mass error of the planet in either [upper,lower] or [error] format.
-    Radius_error: list
-        Radius error of the planet in either [upper,lower] or [error] format.
-    planet: string
-        Planet type, either 'rocky' (find cmf) or 'ocean' (find wmf) planet.
+    This function constructs a predictive model by interpolating the data to estimate 
+    the interior based on the mass and radius for rocky, water or thin 
+    envelope models. The methodology is detailed in Plotnykov & Valencia (2024).
+
+    Parameters:
+    -----------
+    N: int
+        Number of samples to generate. 
+        If Mass or Radius posterior is given, N is set to the size [n].
+    Mass: list
+        Set planet's mass in Earth masses, 
+        assumes normal distribution or skew normal distribution.
+        Format: [mu, sigma] or [mu, sigma_up, sigma_lw] or posterior size [n].
+    Radius: list
+        Set planet's radius in Earth radii, 
+        assumes normal distribution or skew normal distribution.
+        Format: [mu, sigma] or [mu, sigma_up, sigma_lw] or posterior size [n].
+    xSi: list
+        Set the amount of Si in the core (by mol), 
+        assumes uniform distribution (maximum range is 0-0.2).
+        Format: [a, b] or posterior size [n].
+    xFe: list
+        Set the amount of Fe in the mantle (by mol),
+        assumes uniform distribution (maximum range is 0-0.2).
+        Format: [a, b] or posterior size [n].
+    CMF: list
+        Set rocky core mass fraction (CMF) only valid for water worlds,
+        assumes uniform distribution (default is fixed at 0.325).
+        Format: [mu, sigma] posterior size [n].
+    FeMF: list
+        Set iron mass fraction of the planet.
+        Format: posterior size [n].
+    WMF: list
+        Set water mass fraction of the planet.
+        Format: posterior size [n].
+    atm_height: list
+        Set height of the atmosphere (km) only valid for thin envelope models,
+        assumes uniform distribution (default is fixed at 20-30 km)
+        Format: [a, b] or posterior size [n].
     '''
 
     def __init__(self, N=50000, Mass=[1,0.001], Radius=[1,0.001], **kwargs):
@@ -134,7 +161,7 @@ class exoplanet(planet_property):
         return mu + np.concatenate([UP[UP>0],LW[LW<0]])
     
     def _check_rocky(self,get_R):
-        # check if parameters are in bounds
+        # check if parameters are in bounds for rocky planets
         if (self.Mass==None).any():
             raise Exception('Mass must be set.')
         elif (self.Radius==None).any():
@@ -154,7 +181,8 @@ class exoplanet(planet_property):
         for item in  ['Mass','Radius','xSi','xFe']:
             setattr(self, item, getattr(self, item)[pos])        
         
-    def _check_ocean(self,get_R):
+    def _check_water(self,get_R):
+        # check if parameters are in bounds for water planets
         pos = (self.Mass>10**-0.5) & (self.Mass<10**1.3) & (0<=self.CMF) & (self.CMF<=1)
         for item in  ['Mass','Radius','CMF']:
             setattr(self, item, getattr(self, item)[pos])
@@ -189,6 +217,9 @@ class exoplanet(planet_property):
             pickle.dump(dic,f)
 
 def load_Data():
+    '''
+    Load the data for the rocky and water planets to use in interpolation models.
+    '''
     package_dir = os.path.dirname(__file__)
     # load rocky data
     with open(package_dir+'/Data/MRdata_rocky.pkl','rb') as f:
