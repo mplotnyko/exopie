@@ -3,7 +3,6 @@ import pickle
 import numpy as np
 from scipy.optimize import minimize
 
-
 class planet_property:
     '''
     Initialize properties of a planet.
@@ -212,9 +211,10 @@ class exoplanet(planet_property):
                 filename = f'data_run_{i}.pkl'
         with open(filename,'wb') as f:
             dic = {}
-            for item in  ['Mass','Radius','CMF','FeMF','WMF','xSi','xFe','atm_height']:
+            for item in  self._save_parameters:
                 dic[item] = getattr(self, item)
             pickle.dump(dic,f)
+
 
 def load_Data():
     '''

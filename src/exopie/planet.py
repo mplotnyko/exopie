@@ -14,15 +14,22 @@ class rocky(exoplanet):
         xFe = kwargs.get('xFe', [0,0.2])
         self.set_xSi(a=xSi[0], b=xSi[1])
         self.set_xFe(a=xFe[0], b=xFe[1])
+        self._save_parameters = ['Mass','Radius','CMF','xSi','xFe','FeMF','SiMF','MgMF']
 
     def run(self):
         '''
         Run the rocky planet model.
 
-        Returns:
+        Attributes:
         --------
-        self.CMF, self.FeMF, self.SiMF, self.MgMF: array
-            Core mass fraction and mass fractions of Fe, Si, Mg.
+        self.CMF: array
+            Core mass fraction 
+        self.FeMF: array
+            Iron mass fraction
+        self.SiMF: array
+            Silicon mass fraction
+        self.MgMF: array
+            Magnesium mass fraction
         '''
         get_R = lambda x: interpn(PointsRocky, Radius_DataRocky, x) # x=cmf,Mass,xSi,xFe 
         self._check_rocky(get_R)
@@ -39,16 +46,18 @@ class water(exoplanet):
         super().__init__(N, Mass, Radius, **kwargs)
         CMF = kwargs.get('CMF', [0.325,0.325])
         self.set_CMF(a=CMF[0], b=CMF[1])
+        self._save_parameters = ['Mass','Radius','WMF','CMF']
 
     def run(self):
         '''
         Run the water planet model.
 
-        Returns:
+        Attributes:
         --------
         self.WMF: array
-            Water mass fraction.
-        
+            Water mass fraction
+        self.CMF: array
+            Rocky core mass fraction (cmf = rcmf*(1-wmf))
         '''
         get_R = lambda x: interpn(PointsWater, Radius_DataWater, x) # x=wmf,Mass,cmf   
         self._check_water(get_R)
@@ -67,10 +76,18 @@ class envelope(exoplanet):
         self.set_xSi(a=xSi[0], b=xSi[1])
         self.set_xFe(a=xFe[0], b=xFe[1])
         self.set_atm_height(a=atm_height[0], b=atm_height[1])
+        self._save_parameters = ['Mass','Radius','CMF','atm_height']
 
     def run(self):
         '''
         Run the envelope planet model.
+
+        Attributes:
+        --------
+        self.CMF: array
+            Core mass fraction
+        self.atm_height: array
+            Height of the atmosphere (km)
         '''
         get_R = lambda x: interpn(PointsRocky, Radius_DataRocky, x[:4].T)+x[4]/6.371e3 # x=cmf,Mass,xSi,xFe,atm_h
         pos = (self.Mass>10**-0.5) & (self.Mass<10**1.3)
@@ -79,7 +96,6 @@ class envelope(exoplanet):
         args = np.asarray([self.Radius,self.Mass,self.xSi,self.xFe,self.atm_height])
         residual = lambda x,param: np.sum(param[0]-_get_R(np.asarray([x[0],*param[1:]])))**2/1e-4 
         self.CMF = self._run_MC(residual,args)
-        self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
     
 PointsRocky,Radius_DataRocky,PointsWater,Radius_DataWater = load_Data() # load interpolation fits
 
