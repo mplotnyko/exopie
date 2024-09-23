@@ -17,7 +17,7 @@ def delta_cmf(M,R,dM,dR):
     return (rho_c/rho_bulk)*(dM/M-3*dR/R)/(rho_c / rho_m - 1)
 
 def chemistry(cmf,xSi=0,xFe=0.1,trace_core=0.02,
-                xNi=None,xAl=0.04,xCa=0.05,xWu=0.2):
+                xNi=0.1,xAl=0,xCa=0,xWu=0.2):
     '''
     Calculate the interior chemistry of a planet.
 

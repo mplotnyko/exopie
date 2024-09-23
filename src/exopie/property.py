@@ -73,7 +73,7 @@ class planet_property:
 
 class exoplanet(planet_property):
     '''
-    Calculate the interior structure parameters (CMF, Fe-MF, WMF) for a given exoplanet 
+`   Calculate the interior structure parameters (CMF, Fe-MF, WMF) for a given exoplanet 
     using the SUPEREARTH interior structure model developed by Valencia et al. (2006) 
     and updated in Plotnykov & Valencia (2020). 
 
@@ -115,7 +115,7 @@ class exoplanet(planet_property):
     atm_height: list
         Set height of the atmosphere (km) only valid for thin envelope models,
         assumes uniform distribution (default is fixed at 20-30 km)
-        Format: [a, b] or posterior size [n].
+        Format: [a, b] or posterior size [n].`
     '''
 
     def __init__(self, N=50000, Mass=[1,0.001], Radius=[1,0.001], **kwargs):
@@ -201,7 +201,44 @@ class exoplanet(planet_property):
         if not isinstance(xi, (list, np.ndarray)):
             return np.asarray(res).flatten()
         return np.asarray(res).reshape(-1,self.N).T
+
+    def corner(self, Data=['Mass', 'Radius', 'CMF', 'FeMF', 'Fe/Si', 'Fe/Mg'], corner_data=None, 
+               labels=None, bins=50, smooth=True, show_titles=True, **kwargs):
+        '''
+        Corner plot of the planet interior parameters.
     
+        Parameters:
+        -----------
+        Data: list
+            list of supported parameters to be plot.
+            ['Mass', 'Radius', 'CMF', 'WMF', 'FeMF', 'SiMF', 'MgMF', 'Fe/Si', 'Fe/Mg', 'xSi', 'xFe']
+        corner_data: array
+            Data to plot. If None, the data will be extracted from the model.
+        other: 
+            Other parameters to be passed to the corner.corner function.
+        
+        Returns:
+        --------
+        fig, axs: matplotlib figure and axis objects.
+        '''
+
+        if corner_data is None:
+            data = model.__dict__
+            corner_data = []
+            for item in Data:
+                if item == 'Fe/Mg':
+                    corner_data.append(data['_FeMF'] / data['MgMF'])
+                    pos = data['_FeMF']/data['MgMF']<15 # remove all the cases where Fe/Mg goes to inf
+                elif item == 'Fe/Si':
+                    corner_data.append(data['_FeMF'] / data['SiMF'])
+                else:
+                    corner_data.append(data[f'_{item}'])
+            labels = [item if item not in ['Mass', 'Radius', 'FeMF'] else {'Mass': 'M', 'Radius': 'R', 'FeMF': 'Fe-MF'}[item] for item in Data]
+            corner_data = np.array(corner_data).T[pos]
+        fig = corner.corner(corner_data, labels=labels, bins=bins, smooth=smooth, show_titles=show_titles, **kwargs)
+        axs = np.array(fig.axes).reshape((6, 6))
+        return fig, axs
+
     def save_data(self,filename=None):
         if filename is None:
             filename = 'data_run_0.pkl'
