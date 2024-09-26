@@ -18,10 +18,20 @@ class rocky(exoplanet):
         self.set_xFe(a=xFe[0], b=xFe[1])
         self._save_parameters = ['Mass','Radius','CMF','xSi','xFe','FeMF','SiMF','MgMF']
 
-    def run(self):
+    def run(self,star=None,ratio=None,star_norm=None):
         '''
         Run the rocky planet model.
 
+        Parameters:
+        -----------
+        star: list [Fe/H, Mg/H, Si/H]
+            Stellar abundances of Fe/H, Mg/H, Si/H.
+        ratio: str
+            ratio to constrain the planet chemistry to the star.
+            e.g. ratio='Fe/Si,Fe/Mg,Mg/Si' (default=None)
+        star_norm: list [Fe/H, Mg/H, Si/H]
+            Normalization reference for the stellar abundances. 
+        
         Attributes:
         --------
         self.CMF: array
@@ -36,9 +46,40 @@ class rocky(exoplanet):
         get_R = lambda x: interpn(PointsRocky, Radius_DataRocky, x) # x=cmf,Mass,xSi,xFe 
         self._check_rocky(get_R)
         args = np.asarray([self.Radius,self.Mass,self.xSi,self.xFe]).T
-        residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4 
-        self.CMF = self._run_MC(residual,args)
-        self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
+        if star is None:
+            residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4 
+            self.CMF = self._run_MC(residual,args)
+            self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
+        elif ratio is None:
+            warnings.warn('No target ratio provided. Running without stellar constraint.')
+            residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4
+            self.CMF = self._run_MC(residual,args)
+            self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
+        else:
+            if star_norm is None:
+                star_norm = [7.46,7.55,7.51] # Fe, Mg, Si Asplund 2021
+            mu = [55.85e-3,28.09e-3,24.31e-3] # Fe, Mg, Si atomic masses
+            star_w = [10**(star[i]+star_norm[i]-12)*mu[i] for i in range(3)]
+            
+            ratio_split = ratio.lower().split(',') # Fe/Si, Fe/Mg, Mg/Si ....
+            dr_star = {'fe': star_w[0],'mg': star_w[1], 'si': star_w[2]}
+            print('Using stellar constraints:',end=' ')
+            [print(item+f' ({eval(item, dr_star.copy()):.2f})',end=', ') for item in ratio_split]
+            print()
+            
+            def residual(x, param):
+                radius_residual = np.sum(param[0] - get_R(np.asarray([x[0],param[1],x[1],x[2]]).T))**2 / 1e-4
+                data = chemistry(x[0], xSi=x[1], xFe=x[2],xWu=x[3])
+                dr_planet = {'fe': data[0], 'si': data[1], 'mg': data[2]}
+                chem_residual = 0
+                for item in ratio_split:
+                    chem_residual += np.sum(eval(item, dr_star.copy())-eval(item, dr_planet.copy()))**2/1e-4
+                return radius_residual + chem_residual
+            
+            args = np.asarray([self.Radius,self.Mass]).T
+            self.CMF,self.xSi,self.xFe,self.xWu = self._run_MC(residual,args,
+                                xi=[0.325,0.1,0.1,0.2],bounds=[[0,1],[0,0.2],[0,0.2],[0,0.5]]).T
+            self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe,xWu=self.xWu)
     
 class water(exoplanet):
     def __init__(self, Mass=[1,0.001], Radius=[1,0.001], N=50000, **kwargs):
@@ -231,6 +272,5 @@ def get_mass(R,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
             res.append(minimize(residual,1,args=args,bounds=[[10**-0.5,10**1.3]]).x[0])
     else:
         args = [R,cmf,wmf,xSi,xFe]
-        print(args)
         res = minimize(residual,1,args=args,bounds=[[10**-0.5,10**1.3]]).x[0]
     return res

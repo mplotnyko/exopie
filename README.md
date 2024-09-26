@@ -12,7 +12,7 @@ updated in Plotnykov & Valencia [(2020)](https://academic.oup.com/mnras/article/
 
 ## Installation
 
-```zsh
+```ssh
 pip install exopie
 ```
 

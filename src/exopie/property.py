@@ -200,7 +200,10 @@ class exoplanet(planet_property):
             res.append(minimize(residual,xi,args=args[i],bounds=bounds).x)
         if not isinstance(xi, (list, np.ndarray)):
             return np.asarray(res).flatten()
-        return np.asarray(res).reshape(-1,self.N).T
+        # elif len(xi)==1:
+        #     return np.asarray(res).reshape(-1,self.N).T
+        else:
+            return np.asarray(res)
 
     def corner(self, Data=['Mass', 'Radius', 'CMF', 'FeMF', 'Fe/Si', 'Fe/Mg'], corner_data=None, 
                labels=None, bins=50, smooth=True, show_titles=True, **kwargs):
@@ -221,7 +224,7 @@ class exoplanet(planet_property):
         --------
         fig, axs: matplotlib figure and axis objects.
         '''
-
+        import corner
         if corner_data is None:
             data = model.__dict__
             corner_data = []
