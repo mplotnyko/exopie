@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import interpn
+from scipy.optimize import minimize
 from exopie.property import exoplanet, load_Data
 from exopie.tools import chemistry
 import warnings
@@ -277,7 +278,7 @@ def get_mass(R,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
         args = [R,cmf,wmf,xSi,xFe]
         res = minimize(residual,1,args=args,bounds=[[10**-0.5,10**1.3]]).x[0]
     return res
-def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,N=50000,xSi=[0,0.2],xFe=[0,0.2],xCore_trace=0.02):
+def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,xSi=[0,0.2],xFe=[0,0.2],xCore_trace=0.02):
     '''
     Convert stellar abundances to planet abundances, using Monte Carlo sampling.
     Stellar abundances (X/H) are given without normalization in log10 space.
@@ -297,8 +298,6 @@ def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,N=50000,xSi=[0,0.2],xFe=[0,0
         molar aluminium abundance.
     Ni: array, optional
         molar nickel abundance.
-    N: int
-        Number of Monte Carlo samples.
     xSi: list
         Range of silicon molar fraction in the core.
     xFe: list
@@ -307,20 +306,19 @@ def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,N=50000,xSi=[0,0.2],xFe=[0,0
         Molar fraction of trace metals in the core.
     Returns:
     --------
-    Fe-MF: float
+    CMF: array
+        Core mass fraction.
+    FeMF: array
         Iron mass fraction.
-    Si-MF: float
-        Silicon mass fraction.
-    Mg-MF: float
-        Magnesium mass fraction.
     '''
     mu = [55.85e-3,28.09e-3,24.31e-3,40.08e-3,26.98e-3,58.69e-3] # Fe, Mg, Si, Ca, Al, Ni atomic masses
     Fe_st, Mg_st, Si_st = 10**(Fe)*mu[0], 10**(Mg)*mu[1], 10**(Si)*mu[2]
+    N = len(Fe)
 
     # if not provided, set to very low value so xCa, xAl, xNi are zero
-    Ca_st = 10**(Ca)*mu[3] if Ca is not None  else 1e-10 
-    Al_st = 10**(Al)*mu[4] if Al is not None  else 1e-10
-    Ni_st = 10**(Ni)*mu[5] if Ni is not None  else 1e-10
+    Ca_st = 10**(Ca)*mu[3] if Ca is not None  else np.repeat(1e-10,N)
+    Al_st = 10**(Al)*mu[4] if Al is not None  else np.repeat(1e-10,N)
+    Ni_st = 10**(Ni)*mu[5] if Ni is not None  else np.repeat(1e-10,N)
 
     xsi = np.random.uniform(xSi[0],xSi[1],N)
     xfe = np.random.uniform(xFe[0],xFe[1],N)
@@ -358,7 +356,7 @@ def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,N=50000,xSi=[0,0.2],xFe=[0,0
             cmf, Xmgsi, xNi, xAl, xCa = res.x
             femf,simf,mgmf,nimf,camf,almf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                    xNi=xNi,xAl=xAl,xCa=xCa,xWu=0,xSiO2=0)
-            xSiO2, xWu = (0, Xmgsi) if Mg2Si > mgmf / simf else (Xmgsi, 0)
+            xSiO2, xWu = (0, Xmgsi) if Mg2Si[i] > mgmf / simf else (Xmgsi, 0)
             data = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                     xNi=xNi,xAl=xAl,xCa=xCa,xWu=xWu,xSiO2=xSiO2)
             model_param[i] = cmf,xSi,xFe,xNi,xAl,xCa,xWu,xSiO2

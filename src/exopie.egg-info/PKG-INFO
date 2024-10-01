@@ -10,11 +10,8 @@ Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
-License-File: LICENSE
-Requires-Dist: numpy
-Requires-Dist: scipy
 Provides-Extra: optional
-Requires-Dist: corner; extra == "optional"
+License-File: LICENSE
 
 # exopie
 Find exoplanet interior structure error (exopie), given mass and radius of the planet.
