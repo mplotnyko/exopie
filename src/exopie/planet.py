@@ -317,10 +317,10 @@ def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,xSi=[0,0.2],xFe=[0,0.2],xCor
     N = len(Fe)
 
     # if not provided, set to very low value so xCa, xAl, xNi are zero
-    Ca_st = 10**(Ca)*mu[3] if Ca is not None  else np.repeat(1e-100,N)
-    Al_st = 10**(Al)*mu[4] if Al is not None  else np.repeat(1e-100,N)
-    Ni_st = 10**(Ni)*mu[5] if Ni is not None  else np.repeat(1e-100,N)
-
+    Ca_st = 10**(Ca)*mu[3] if Ca is not None  else np.repeat(10**(12-6.3),N)
+    Al_st = 10**(Al)*mu[4] if Al is not None  else np.repeat(10**(12-6.43),N)
+    Ni_st = 10**(Ni)*mu[5] if Ni is not None  else np.repeat(10**(12-6.2),N)
+    
     xsi = np.random.uniform(xSi[0],xSi[1],N)
     xfe = np.random.uniform(xFe[0],xFe[1],N)
 
