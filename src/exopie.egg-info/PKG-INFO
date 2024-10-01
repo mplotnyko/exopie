@@ -1,0 +1,35 @@
+Metadata-Version: 2.1
+Name: exopie
+Version: 1.0.4
+Summary: A package for finding exoplanet interiors
+Home-page: https://github.com/mplotnyko/exopie/
+Author: Mykhaylo Plotnykov
+Author-email: mykhaylo.plotnykov@mail.utoronto.ca
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Provides-Extra: optional
+License-File: LICENSE
+
+# exopie
+Find exoplanet interior structure error (exopie), given mass and radius of the planet.
+
+The methodology is described in Plotnykov & Valencia (2024) and is based on the SUPEREARTH interior structure model developed by Valencia et al. [(2006)](https://www.sciencedirect.com/science/article/abs/pii/S0019103505004574?via%3Dihub) and 
+updated in Plotnykov & Valencia [(2020)](https://academic.oup.com/mnras/article/499/1/932/5899063). 
+
+## Features
+* Find the core mass fraction (CMF) of a rocky planet.
+* Find the water mass fraction (WMF) of a temperate water world (Teq=300K).
+* Find the rocky interior of a planet with thin atmosphere (~50km).
+* Find the atmospheric mass fraction (AMF) of a H_2 dominated sub-Neptune (comming).
+
+## Installation
+
+```ssh
+pip install exopie
+```
+
+## Citation
+Please cite Plotnykov & Valencia (2024) if you use this code or parts of SUPEREARTH.
