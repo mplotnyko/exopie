@@ -294,16 +294,18 @@ def star_to_planet(Fe,Si,Mg,Ca=-2,Al=-2,Ni=-2,Sun=[7.46,7.51,7.55,6.20,6.30,6.43
         Default is to set to -2 dex.
     Sun: list
         Solar abundances of Fe, Si, Mg, Ca, Al, Ni in log scale.
-    xSi: list
-        Range of silicon molar fraction in the core.
-    xFe: list
-        Range of iron molar fraction in the mantle.
+    xSi: list, array
+        Range or array of silicon molar fraction in the core.
+    xFe: list, array
+        Range or array of iron molar fraction in the mantle.
     xCore_trace: float
         Molar fraction of trace metals in the core.
+    tol: float
+        Tolerance for the optimization.
     Returns:
     --------
-    star: object
-        Host star object with all properties.
+    host_star: object
+        Host star object with all the properties.
     '''
     if not isinstance(Fe, (np.ndarray)):
         Fe = np.array([Fe])
@@ -348,8 +350,7 @@ def star_to_planet(Fe,Si,Mg,Ca=-2,Al=-2,Ni=-2,Sun=[7.46,7.51,7.55,6.20,6.30,6.43
                        bounds=[[1e-15,1-1e-15],[1e-15,0.5],[0,0.2],[0,0.2],[0,0.2]])
         
         if res.success:
-            cmf, Xmgsi = res.x
-            xNi, xAl, xCa = 0, 0, 0
+            cmf, Xmgsi, xNi, xAl, xCa = res.x
             femf,simf,mgmf,nimf,camf,almf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                    xNi=xNi,xAl=xAl,xCa=xCa,xWu=0,xSiO2=0)
             xSiO2, xWu = (0, Xmgsi) if Mg2Si[i] > mgmf / simf else (Xmgsi, 0)
