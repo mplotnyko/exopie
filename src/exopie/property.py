@@ -255,6 +255,20 @@ class exoplanet(planet_property):
                 dic[item] = getattr(self, item)
             pickle.dump(dic,f)
 
+class host_star(object):
+    '''
+    Convert stellar abundances to planet equivelent (CMF, FeMF, etc.)
+    '''
+    def __init__(self,star_abundance,star_ratio,planet_data,model_param):
+        for i,item in enumerate(['Fe','Si','Mg','Ca','Al','Ni']):
+            setattr(self,item,star_abundance[i])
+        for i,item in enumerate(['Fe2Si','Fe2Mg','Mg2Si','Fe2Ni','Mg2Ca','Mg2Al']):
+            setattr(self,item,star_ratio[i])
+        for i,item in enumerate(['FeMF','SiMF','MgMF','CaMF','AlMF','NiMF']):
+            setattr(self,item,planet_data[:,i])
+        for i,item in enumerate(['CMF','xSi','xFe','xNi','xAl','xCa','xWu','xSiO2']):
+            setattr(self,item,model_param[:,i])
+
 
 def load_Data():
     '''

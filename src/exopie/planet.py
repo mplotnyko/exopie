@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import interpn
 from scipy.optimize import minimize
-from exopie.property import exoplanet, load_Data
+from exopie.property import exoplanet, host_star, load_Data
 from exopie.tools import chemistry
 import warnings
 
@@ -278,26 +278,22 @@ def get_mass(R,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
         args = [R,cmf,wmf,xSi,xFe]
         res = minimize(residual,1,args=args,bounds=[[10**-0.5,10**1.3]]).x[0]
     return res
-def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,xSi=[0,0.2],xFe=[0,0.2],xCore_trace=0.02):
+
+def star_to_planet(Fe,Si,Mg,Ca=-2,Al=-2,Ni=-2,Sun=[7.46,7.51,7.55,6.20,6.30,6.43],
+                   xSi=[0,0.2],xFe=[0,0.2],xCore_trace=0.02,tol=1e-8):
     '''
     Convert stellar abundances to planet abundances, using Monte Carlo sampling.
-    Stellar abundances (X/H) are given without normalization in log10 space.
-    Such that total abundance compared to hydrogen is 10**(X/H).
-
+    Stellar abundances (X/H in dex) are assumed to be normalized to Asplund 2021 solar abundances.
+    
     Parameters:
     -----------
-    Fe: array
-        molar iron abundance.
-    Mg: array
-        molar magnesium abundance.
-    Si: array
-        molar silicon abundance.
-    Ca: array, optional
-        molar calcium abundance.
-    Al: array, optional
-        molar aluminium abundance.
-    Ni: array, optional
-        molar nickel abundance.
+    Fe, Mg, Si: array
+        Stellar abundances of Fe, Si, Mg ratative to solar in dex.
+    Ca, Al, Ni: array, optional
+        Stellar abundances of Ca, Al, Ni ratative to solar in dex.
+        Default is to set to -2 dex.
+    Sun: list
+        Solar abundances of Fe, Si, Mg, Ca, Al, Ni in log scale.
     xSi: list
         Range of silicon molar fraction in the core.
     xFe: list
@@ -306,35 +302,33 @@ def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,xSi=[0,0.2],xFe=[0,0.2],xCor
         Molar fraction of trace metals in the core.
     Returns:
     --------
-    CMF, FeMF: list of arrays
-        [Core mass fraction, Iron mass fraction]
-    Model parameters: list of arrays
-        parameters that go into chemistry function:
-        [CMF, xSi, xFe, xNi, xAl, xCa, xWu, xSiO2]
+    star: object
+        Host star object with all properties.
     '''
-    mu = [55.85e-3,28.09e-3,24.31e-3,40.08e-3,26.98e-3,58.69e-3] # Fe, Mg, Si, Ca, Al, Ni atomic masses
-    Fe_st, Mg_st, Si_st = 10**(Fe)*mu[0], 10**(Mg)*mu[1], 10**(Si)*mu[2]
+    if not isinstance(Fe, (np.ndarray)):
+        Fe = np.array([Fe])
     N = len(Fe)
-
-    # if not provided, set to very low value so xCa, xAl, xNi are zero
-    Ca_st = 10**(Ca)*mu[3] if Ca is not None  else np.repeat(10**(12-6.3),N)
-    Al_st = 10**(Al)*mu[4] if Al is not None  else np.repeat(10**(12-6.43),N)
-    Ni_st = 10**(Ni)*mu[5] if Ni is not None  else np.repeat(10**(12-6.2),N)
+    # Assume Asplund 2021 solar abundances
+    star = np.empty([6,N])
+    mu = [55.85e-3,28.09e-3,24.31e-3,40.08e-3,26.98e-3,58.69e-3] # Fe, Si, Mg, Ca, Al, Ni atomic masses
+    star_abundance = [Fe,Si,Mg,Ca,Al,Ni]
+    for i in range(6):
+        star[i] = 10**(star_abundance[i]+Sun[i])*mu[i]
     
-    xsi = np.random.uniform(xSi[0],xSi[1],N)
-    xfe = np.random.uniform(xFe[0],xFe[1],N)
+    if len(xFe)==2:
+        xfe = np.random.uniform(xFe[0],xFe[1],N)
+    if len(xSi)==2:
+        xsi = np.random.uniform(xSi[0],xSi[1],N)
 
-    Fe2Si = Fe_st/Si_st
-    Fe2Mg = Fe_st/Mg_st
-    Mg2Si = Mg_st/Si_st
-    Fe2Ni = Fe_st/Ni_st
-    Mg2Ca = Mg_st/Ca_st
-    Mg2Al = Mg_st/Al_st
+    Fe2Si,Fe2Mg,Mg2Si = star[0]/star[1],star[0]/star[2],star[2]/star[1]
+    # if Ni,Ca,Al are not provided, set to very low value so xCa, xAl, xNi are zero
+    Ni2Fe,Ca2Mg,Al2Mg = star[5]/star[0],star[3]/star[2],star[4]/star[2]
+    star_ratio = [Fe2Si,Fe2Mg,Mg2Si,Ni2Fe,Ca2Mg,Al2Mg]
 
     def residual(x,param):
         # residual function for Monte Carlo sampling
         cmf, Xmgsi, xNi, xAl, xCa = x
-        Fe2Si,Fe2Mg,Mg2Si,Fe2Ni,Mg2Ca,Mg2Al,xFe,xSi = param
+        Fe2Si,Fe2Mg,Mg2Si,Ni2Fe,Ca2Mg,Al2Mg,xFe,xSi = param
         
         femf,simf,mgmf,nimf,camf,almf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                    xNi=xNi,xAl=xAl,xCa=xCa,xWu=0,xSiO2=0)
@@ -342,27 +336,31 @@ def star_to_planet(Fe,Mg,Si,Ca=None,Al=None,Ni=None,xSi=[0,0.2],xFe=[0,0.2],xCor
         femf,simf,mgmf,camf,almf,nimf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                    xNi=xNi,xAl=xAl,xCa=xCa,xWu=xWu,xSiO2=xSiO2)
         res = ( (femf/simf - Fe2Si)**2/1e-4 + (femf/mgmf - Fe2Mg)**2/1e-4 + (mgmf/simf - Mg2Si)**2/1e-4 +
-                (femf/nimf - Fe2Ni)**2/1e-4 + (mgmf/camf - Mg2Ca)**2/1e-4 + (mgmf/almf - Mg2Al)**2/1e-4 )
+                (nimf/femf - Ni2Fe)**2/1e-3 + (camf/mgmf - Ca2Mg)**2/1e-3 + (almf/mgmf - Al2Mg)**2/1e-3 )
         return res
     
-    model_param = np.zeros((N,8))
-    star_data = np.zeros((N,2))
+    model_param = np.zeros([N,8])
+    planet_data = np.zeros([N,6])
     for i in range(N):
         xFe,xSi = xfe[i],xsi[i]
-        param = [Fe2Si[i],Fe2Mg[i],Mg2Si[i],Fe2Ni[i],Mg2Ca[i],Mg2Al[i],xFe,xSi]
-        res = minimize(residual,[0.325,0.2,0.,0.,0.],args=param,
-                       bounds=[[1e-15,1-1e-15],[1e-15,0.5],[1e-15,0.4],[1e-15,0.4],[1e-15,0.4]])
+        param = [Fe2Si[i],Fe2Mg[i],Mg2Si[i],Ni2Fe[i],Ca2Mg[i],Al2Mg[i],xFe,xSi]
+        res = minimize(residual,[0.325,0.2,0,0,0],args=param,tol=tol,
+                       bounds=[[1e-15,1-1e-15],[1e-15,0.5],[0,0.2],[0,0.2],[0,0.2]])
+        
         if res.success:
-            
-            cmf, Xmgsi, xNi, xAl, xCa = res.x
+            cmf, Xmgsi = res.x
+            xNi, xAl, xCa = 0, 0, 0
             femf,simf,mgmf,nimf,camf,almf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                    xNi=xNi,xAl=xAl,xCa=xCa,xWu=0,xSiO2=0)
             xSiO2, xWu = (0, Xmgsi) if Mg2Si[i] > mgmf / simf else (Xmgsi, 0)
             data = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                     xNi=xNi,xAl=xAl,xCa=xCa,xWu=xWu,xSiO2=xSiO2)
+    
             model_param[i] = cmf,xSi,xFe,xNi,xAl,xCa,xWu,xSiO2
-            star_data[i] = cmf,data[0]
+            planet_data[i] = data               
+            
         else:
             model_param[i] = np.repeat(np.nan,8)
-            star_data[i] = np.repeat(np.nan,2)
-    return star_data,model_param
+            planet_data[i] = np.repeat(np.nan,6)
+    return host_star(star_abundance,star_ratio,planet_data,model_param)
+    
