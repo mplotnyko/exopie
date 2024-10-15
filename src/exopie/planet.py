@@ -50,12 +50,12 @@ class rocky(exoplanet):
         if star is None:
             residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4 
             self.CMF = self._run_MC(residual,args)
-            self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
+            self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
         elif ratio is None:
             warnings.warn('No target ratio provided. Running without stellar constraint.')
             residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4
             self.CMF = self._run_MC(residual,args)
-            self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
+            self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
         else:
             if star_norm is None:
                 star_norm = [7.46,7.55,7.51] # Fe, Mg, Si Asplund 2021
@@ -80,7 +80,7 @@ class rocky(exoplanet):
             args = np.asarray([self.Radius,self.Mass]).T
             self.CMF,self.xSi,self.xFe,self.xWu = self._run_MC(residual,args,
                                 xi=[0.325,0.1,0.1,0.2],bounds=[[0,1],[0,0.2],[0,0.2],[0,0.5]]).T
-            self.FeMF,self.SiMF,self.MgMF = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe,xWu=self.xWu)
+            self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe,xWu=self.xWu)
     
 class water(exoplanet):
     def __init__(self, Mass=[1,0.001], Radius=[1,0.001], N=50000, **kwargs):
