@@ -101,13 +101,20 @@ class water(exoplanet):
         self.WMF: array
             Water mass fraction
         self.CMF: array
-            Rocky core mass fraction (cmf = rcmf*(1-wmf))
+            Rocky core mass fraction (rcmf = (1-wmf)/cmf)
+        self.FeMF: array
+            Iron mass fraction
+        self.SiMF: array
+            Silicon mass fraction
+        self.MgMF: array
+            Magnesium mass fraction
         '''
         get_R = lambda x: interpn(PointsWater, Radius_DataWater, x) # x=wmf,Mass,cmf   
         self._check_water(get_R)
         args = np.asarray([self.Radius,self.Mass,self.CMF]).T
         residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],param[1],param[2]*(1-x[0])]).T))**2/1e-4 
         self.WMF = self._run_MC(residual,args)
+        self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=0.,xFe=0.,xWu=0.2)
 
 class envelope(exoplanet):
     def __init__(self, Mass=[1,0.001], Radius=[1,0.001], atm_height=[20,30], N=50000, **kwargs):
@@ -166,8 +173,8 @@ def get_radius(M,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
     Radius: float or array
         Radius of the planet in Earth radii.
     '''
-    if wmf is None: rocky = True
-
+    rocky = True if wmf is None else False
+    
     if isinstance(M, (list, np.ndarray)):
         n = len(M)
         wmf = np.full(n,wmf)
@@ -332,7 +339,7 @@ def star_to_planet(Fe,Si,Mg,Ca=-2,Al=-2,Ni=-2,Sun=[7.46,7.51,7.55,6.20,6.30,6.43
         cmf, Xmgsi, xNi, xAl, xCa = x
         Fe2Si,Fe2Mg,Mg2Si,Ni2Fe,Ca2Mg,Al2Mg,xFe,xSi = param
         
-        femf,simf,mgmf,nimf,camf,almf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
+        femf,simf,mgmf,camf,almf,nimf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
                                    xNi=xNi,xAl=xAl,xCa=xCa,xWu=0,xSiO2=0)
         xSiO2, xWu = (0, Xmgsi) if Mg2Si > mgmf / simf else (Xmgsi, 0)
         femf,simf,mgmf,camf,almf,nimf = chemistry(cmf,xSi=xSi,xFe=xFe,trace_core=xCore_trace,
