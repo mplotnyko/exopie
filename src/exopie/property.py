@@ -7,14 +7,13 @@ class planet_property:
     '''
     Initialize properties of a planet.
     '''
-    def __init__(self, N=50000, Mass=None, Radius=None, CMF=None, FeMF=None, WMF=None, xSi=None, xFe=None, atm_height=None):
+    def __init__(self, N=50000, Mass=None, Radius=None, CMF=None, WMF=None, xSi=None, xFe=None, atm_height=None):
         self._N = N
         self._Mass = np.array(Mass)
         self._Radius = np.array(Radius)
         self._xSi = np.array(xSi)
         self._xFe = np.array(xFe)
         self._CMF = np.array(CMF)
-        self._FeMF = np.array(FeMF)
         self._WMF = np.array(WMF)
         self._atm_height = np.array(atm_height)
     
@@ -52,12 +51,6 @@ class planet_property:
     @CMF.setter
     def CMF(self, value):
         self._CMF = value
-    @property
-    def FeMF(self):
-        return self._FeMF
-    @FeMF.setter
-    def FeMF(self, value):
-        self._FeMF = value
     @property
     def WMF(self):
         return self._WMF
@@ -226,20 +219,27 @@ class exoplanet(planet_property):
         '''
         import corner
         if corner_data is None:
-            data = model.__dict__
+            data = self.__dict__
             corner_data = []
             for item in Data:
                 if item == 'Fe/Mg':
-                    corner_data.append(data['_FeMF'] / data['MgMF'])
-                    pos = data['_FeMF']/data['MgMF']<15 # remove all the cases where Fe/Mg goes to inf
+                    corner_data.append(data['FeMF'] / data['MgMF'])
                 elif item == 'Fe/Si':
-                    corner_data.append(data['_FeMF'] / data['SiMF'])
+                    corner_data.append(data['FeMF'] / data['SiMF'])
                 else:
-                    corner_data.append(data[f'_{item}'])
+                    try:
+                        corner_data.append(data[f'_{item}'])
+                    except:
+                        corner_data.append(data[f'{item}'])
             labels = [item if item not in ['Mass', 'Radius', 'FeMF'] else {'Mass': 'M', 'Radius': 'R', 'FeMF': 'Fe-MF'}[item] for item in Data]
+            try:
+                pos = data['FeMF']/data['MgMF']<15 # remove all the cases where Fe/Mg goes to inf_
+            except:
+                pos = np.ones(self.N,dtype=bool)
             corner_data = np.array(corner_data).T[pos]
         fig = corner.corner(corner_data, labels=labels, bins=bins, smooth=smooth, show_titles=show_titles, **kwargs)
-        axs = np.array(fig.axes).reshape((6, 6))
+        n = len(corner_data.T)
+        axs = np.array(fig.axes).reshape((n,n))
         return fig, axs
 
     def save_data(self,filename=None):
