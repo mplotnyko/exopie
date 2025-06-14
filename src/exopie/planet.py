@@ -250,6 +250,35 @@ def get_wmf(M,R,cmf=0.325):
         res = minimize(residual,0,args=args,bounds=[[0,1]]).x[0]
     return res
 
+def get_rhoe(M,R, **kwargs):
+    '''
+    Find the planet density normalized to Earth-like planet for the same mass.
+
+    Parameters:
+    -----------
+    M: float or array
+        Mass of the planet in Earth masses.
+    R: float or array
+        Radius of the planet in Earth radii.
+    **kwargs: dict {'cmf': float, 'xSi': float, 'xFe': float}
+        Optional parameters for radius calculation, default is Earth-like values.
+    Returns:
+    --------
+    rhoe: float or array
+        rho_bulk/rho_earth(M).
+    '''
+    if not kwargs:
+        kwargs = {'cmf': 0.325, 'xSi': 0.2, 'xFe': 0.05}
+    if isinstance(M, (list, np.ndarray)):
+        rhoe = np.zeros(len(M))
+        for i in range(len(M)):
+            r_earth = get_radius(M[i],**kwargs)
+            rhoe[i] = (r_earth/R[i])**3
+    else:
+        r_earth = get_radius(M,**kwargs)
+        rhoe = (r_earth/R)**3
+    return rhoe
+
 def get_mass(R,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
     '''
     Find the Mass of a planet, given radius and interior parameters.
