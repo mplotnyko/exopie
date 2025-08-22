@@ -7,8 +7,7 @@ updated in Plotnykov & Valencia [(2020)](https://academic.oup.com/mnras/article/
 ## Features
 * Find the core mass fraction (CMF) of a rocky planet.
 * Find the water mass fraction (WMF) of a temperate water world (Teq=300K).
-* Find the rocky interior of a planet with thin atmosphere (~50km).
-* Find the atmospheric mass fraction (AMF) of a H_2 dominated sub-Neptune (comming).
+* Find the atmospheric mass fraction (AMF) of a H_2/He dominated sub-Neptune (beta).
 
 ## Installation
 
