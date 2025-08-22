@@ -7,7 +7,7 @@ class planet_property:
     '''
     Initialize properties of a planet.
     '''
-    def __init__(self, N=50000, Mass=None, Radius=None, CMF=None, WMF=None, xSi=None, xFe=None, atm_height=None):
+    def __init__(self, N=50000, Mass=None, Radius=None, CMF=None, WMF=None, AMF=None, xSi=None, xFe=None):
         self._N = N
         self._Mass = np.array(Mass)
         self._Radius = np.array(Radius)
@@ -15,8 +15,7 @@ class planet_property:
         self._xFe = np.array(xFe)
         self._CMF = np.array(CMF)
         self._WMF = np.array(WMF)
-        self._atm_height = np.array(atm_height)
-    
+        self._AMF = np.array(AMF)    
 
     @property
     def N(self):
@@ -58,17 +57,24 @@ class planet_property:
     def WMF(self, value):
         self._WMF = value
     @property
-    def atm_height(self):
-        return self._atm_height
-    @atm_height.setter
-    def atm_height(self, value):
-        self._atm_height = value
+    def AMF(self):
+        return self._AMF
+    @AMF.setter
+    def AMF(self, value):
+        self._AMF = value
+    @property
+    def Teq(self):
+        return self._Teq
+    @Teq.setter
+    def Teq(self, value):
+        self._Teq = value
 
 class exoplanet(planet_property):
     '''
 `   Calculate the interior structure parameters (CMF, Fe-MF, WMF) for a given exoplanet 
     using the SUPEREARTH interior structure model developed by Valencia et al. (2006) 
-    and updated in Plotnykov & Valencia (2020). 
+    and updated in Plotnykov & Valencia (2020) as well as the AMF using the H2-He grid 
+    based on results using CEPAM (Guillot & Morel 1995; Guillot 2010) and H-He EOS from Saumon et al. (1995).
 
     This function constructs a predictive model by interpolating the data to estimate 
     the interior based on the mass and radius for rocky, water or thin 
@@ -87,28 +93,19 @@ class exoplanet(planet_property):
         Set planet's radius in Earth radii, 
         assumes normal distribution or skew normal distribution.
         Format: [mu, sigma] or [mu, sigma_up, sigma_lw] or posterior size [n].
+    CMF: list
+        Set rocky core mass fraction (rcmf = (1-wmf)/cmf) of the planet, 
+        only for water/envelope planets.
+        Format: [mu, sigma] or posterior size [n].
+    Teq: list
+        Set equilibrium temperature of the planet, only for envelope planets.
+        Format: [mu, sigma] or posterior size [n].
     xSi: list
-        Set the amount of Si in the core (by mol), 
-        assumes uniform distribution (maximum range is 0-0.2).
+        Set silicon amount in the core, only for rocky planets.
         Format: [a, b] or posterior size [n].
     xFe: list
-        Set the amount of Fe in the mantle (by mol),
-        assumes uniform distribution (maximum range is 0-0.2).
+        Set iron amount in the mantle, only for rocky planets.
         Format: [a, b] or posterior size [n].
-    CMF: list
-        Set rocky core mass fraction (CMF) only valid for water worlds,
-        assumes uniform distribution (default is fixed at 0.325).
-        Format: [mu, sigma] posterior size [n].
-    FeMF: list
-        Set iron mass fraction of the planet.
-        Format: posterior size [n].
-    WMF: list
-        Set water mass fraction of the planet.
-        Format: posterior size [n].
-    atm_height: list
-        Set height of the atmosphere (km) only valid for thin envelope models,
-        assumes uniform distribution (default is fixed at 20-30 km)
-        Format: [a, b] or posterior size [n].`
     '''
 
     def __init__(self, N=50000, Mass=[1,0.001], Radius=[1,0.001], **kwargs):
@@ -125,7 +122,10 @@ class exoplanet(planet_property):
 
     def set_Radius(self, mu=1, sigma=0.001):
         self.Radius = self._set_parameter(mu,sigma)
-    
+
+    def set_Teq(self,mu=1000, sigma=100):
+        self.Teq = self._set_parameter(mu,sigma)
+
     def set_xSi(self, a=0, b=0.2):
         self.xSi = np.random.uniform(a,b,self.N)
     
@@ -134,9 +134,6 @@ class exoplanet(planet_property):
     
     def set_CMF(self, a=0, b=1):
         self.CMF = np.random.uniform(a,b,self.N)
-
-    def set_atm_height(self, a=20, b=30):
-        self.atm_height = np.random.uniform(a,b,self.N)
 
     def _set_parameter(self, mu, sigma):
         if type(sigma) == np.ndarray or type(sigma) == list:
@@ -152,41 +149,47 @@ class exoplanet(planet_property):
         LW = np.random.normal(0,abs(sigma_lw),size=N)
         return mu + np.concatenate([UP[UP>0],LW[LW<0]])
     
-    def _check_rocky(self,get_R):
-        # check if parameters are in bounds for rocky planets
+    def _test(self):
+        '''
+        check if parameters are accepted by the model.
+        '''
         if (self.Mass==None).any():
             raise Exception('Mass must be set.')
-        elif (self.Radius==None).any():
+        if (self.Radius==None).any():
             raise Exception('Radius must be set.')
         if len(self.Mass) != len(self.Radius):
             raise Exception('Mass and Radius must be of same length.')
-
-        pos = (self.Mass>10**-0.5) & (self.Mass<10**1.3) & (0<=self.xSi) & (self.xSi<=0.2) & (0<=self.xFe) & (self.xFe<=0.2)
-        for item in  ['Mass','Radius','xSi','xFe']:
-            setattr(self, item, getattr(self, item)[pos])
-
-        pos = ( (self.Radius > get_R(np.asarray([np.repeat(1,sum(pos)),self.Mass,self.xSi,self.xFe]).T)) &
-                (self.Radius < get_R(np.asarray([np.repeat(0,sum(pos)),self.Mass,self.xSi,self.xFe]).T)))
-        self._N = sum(pos)
+    
+    def _check(self,get_R):
+        self._test()
+        # check if parameters are in Mass bounds 
+        M_min,M_max = min(self.Points[1]), max(self.Points[1])
+        pos = (self.Mass>M_min) & (self.Mass<M_max)
         if sum(pos)==0:
-            raise Exception('Wrong planet type, no M-R pair in bounds')
-        for item in  ['Mass','Radius','xSi','xFe']:
-            setattr(self, item, getattr(self, item)[pos])        
-        
-    def _check_water(self,get_R):
-        # check if parameters are in bounds for water planets
-        pos = (self.Mass>10**-0.5) & (self.Mass<10**1.3) & (0<=self.CMF) & (self.CMF<=1)
-        for item in  ['Mass','Radius','CMF']:
-            setattr(self, item, getattr(self, item)[pos])
+            raise Exception('Mass out of bounds [{:.2f},{:.2f}]'.format(M_min,M_max))
+        # check if parameters are in Radius bounds
+        if self.type=='rocky':
+            pos = pos & (0<=self.xSi) & (self.xSi<=0.2) & (0<=self.xFe) & (self.xFe<=0.2)
+            args = np.asarray([self.Mass[pos],self.xSi[pos],self.xFe[pos]])
+            xx = [1,0] # bounds for CMF
+        else:
+            pos = pos & (0<=self.CMF) & (self.CMF<=1)
+            args = np.asarray([self.Mass[pos],self.CMF[pos]])
+            xx = [0,1] # bounds for WMF/AMF
             
-        pos = ( (self.Radius < get_R(np.asarray([np.repeat(1,self.N),self.Mass,np.repeat(0,self.N)]).T)) &
-                (self.Radius > get_R(np.asarray([np.repeat(0,self.N),self.Mass,self.CMF]).T))) 
+        pos = ( (self.Radius[pos] > get_R(np.asarray([np.repeat(xx[0],self._N),*args]).T)) &
+                (self.Radius[pos] < get_R(np.asarray([np.repeat(xx[1],self._N),*args]).T)))
         self._N = sum(pos)
-        if self.N==0:
+        
+        if self._N==0:
             raise Exception('Wrong planet type, no M-R pair in bounds')
-        for item in  ['Mass','Radius','CMF']:
-            setattr(self, item, getattr(self, item)[pos])
-
+        if self.type=='rocky':
+            for item in  ['Mass','Radius','xSi','xFe']:
+                setattr(self, item, getattr(self, item)[pos])        
+        else:
+            for item in  ['Mass','Radius','CMF']:
+                setattr(self, item, getattr(self, item)[pos])
+        
     def _run_MC(self,residual,args,bounds=[[0,1]],xi=0.3):
         res = []
         for i in range(self.N):
@@ -254,6 +257,8 @@ class exoplanet(planet_property):
             for item in  self._save_parameters:
                 dic[item] = getattr(self, item)
             pickle.dump(dic,f)
+        
+
 
 class host_star(object):
     '''
@@ -270,19 +275,27 @@ class host_star(object):
             setattr(self,item,model_param[:,i])
 
 
-def load_Data():
+def load_Data(name):
     '''
     Load the data for the rocky and water planets to use in interpolation models.
     '''
     package_dir = os.path.dirname(__file__)
     # load rocky data
-    with open(package_dir+'/Data/MRdata_rocky.pkl','rb') as f:
-        Data = pickle.load(f)
-        PointsRocky = [Data['CMF'],Data['Mass'],Data['xSi'],Data['xFe']]
-        Radius_DataRocky = Data['Radius_total'] # tuple of radius data in Re
+    if name == 'rocky':
+        with open(package_dir+'/Data/MRdata_rocky.pkl','rb') as f:
+            Data = pickle.load(f)
+            points = [Data['CMF'],Data['Mass'],Data['xSi'],Data['xFe']]
+            Radius = Data['Radius_total'] # tuple of radius data in Re
     # load water data
-    with open(package_dir+'/Data/MRdata_water.pkl','rb') as f:
-        Data = pickle.load(f)
-        PointsWater = [Data['WMF'],Data['Mass'],Data['CMF']]
-        Radius_DataWater = Data['Radius_total'] # tuple of radius data in Re
-    return PointsRocky,Radius_DataRocky,PointsWater,Radius_DataWater
+    elif name == 'water':
+        with open(package_dir+'/Data/MRdata_water.pkl','rb') as f:
+            Data = pickle.load(f)
+            points = [Data['WMF'],Data['Mass'],Data['CMF']]
+            Radius = Data['Radius_total'] # tuple of radius data in Re
+    # load envelope data (H2-He grid)
+    elif name == 'envelope':
+        with open(package_dir+'/Data/MRdata_H2.pkl','rb') as f:
+            Data = pickle.load(f)
+            points = [Data['AMF'],Data['Mass'],Data['CMF'],Data['Teq']]
+            Radius = Data['Radius_total'] # tuple of radius data in Re
+    return points,Radius

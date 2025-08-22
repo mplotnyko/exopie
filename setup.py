@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="exopie",
-    version="1.1.1",
+    version="1.1.4",
     author="Mykhaylo Plotnykov",
     author_email="mykhaylo.plotnykov@mail.utoronto.ca",
     description="A package for finding exoplanet interiors",

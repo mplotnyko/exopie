@@ -5,12 +5,11 @@ from exopie.property import exoplanet, host_star, load_Data
 from exopie.tools import chemistry
 import warnings
 
-PointsRocky,Radius_DataRocky,PointsWater,Radius_DataWater = load_Data() # load interpolation fits
 
 class rocky(exoplanet):
     def __init__(self, Mass=[1,0.001], Radius=[1,0.001],  N=50000, **kwargs):
         '''
-        Rocky planet method. CMF, WMF and atm_height will be ignored.
+        Assuming purely rocky planet. xSi and xFe are free parameters.
         '''
         super().__init__(N, Mass, Radius,**kwargs)
         xSi = kwargs.get('xSi', [0,0.2])
@@ -18,6 +17,8 @@ class rocky(exoplanet):
         self.set_xSi(a=xSi[0], b=xSi[1])
         self.set_xFe(a=xFe[0], b=xFe[1])
         self._save_parameters = ['Mass','Radius','CMF','xSi','xFe','FeMF','SiMF','MgMF']
+        self.type = 'rocky'
+        self.Points, self.Radius_Data = load_Data(self.type) # load interpolation fits
 
     def run(self,star=None,ratio=None,star_norm=None):
         '''
@@ -44,16 +45,16 @@ class rocky(exoplanet):
         self.MgMF: array
             Magnesium mass fraction
         '''
-        get_R = lambda x: interpn(PointsRocky, Radius_DataRocky, x) # x=cmf,Mass,xSi,xFe 
-        self._check_rocky(get_R)
+        get_R = lambda x: interpn(self.Points, self.Radius_Data, x) # x=cmf,Mass,xSi,xFe
+        self._check(get_R)
         args = np.asarray([self.Radius,self.Mass,self.xSi,self.xFe]).T
         if star is None:
-            residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4 
+            residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-6
             self.CMF = self._run_MC(residual,args)
             self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
         elif ratio is None:
             warnings.warn('No target ratio provided. Running without stellar constraint.')
-            residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-4
+            residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],*param[1:]]).T))**2/1e-6
             self.CMF = self._run_MC(residual,args)
             self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=self.xSi,xFe=self.xFe)
         else:
@@ -69,12 +70,12 @@ class rocky(exoplanet):
             print()
             
             def residual(x, param):
-                radius_residual = np.sum(param[0] - get_R(np.asarray([x[0],param[1],x[1],x[2]]).T))**2 / 1e-4
+                radius_residual = np.sum(param[0] - get_R(np.asarray([x[0],param[1],x[1],x[2]]).T))**2/1e-6
                 data = chemistry(x[0], xSi=x[1], xFe=x[2],xWu=x[3])
                 dr_planet = {'fe': data[0], 'si': data[1], 'mg': data[2]}
                 chem_residual = 0
                 for item in ratio_split:
-                    chem_residual += np.sum(eval(item, dr_star.copy())-eval(item, dr_planet.copy()))**2/1e-4
+                    chem_residual += np.sum(eval(item, dr_star.copy())-eval(item, dr_planet.copy()))**2/1e-6
                 return radius_residual + chem_residual
             
             args = np.asarray([self.Radius,self.Mass]).T
@@ -91,6 +92,8 @@ class water(exoplanet):
         CMF = kwargs.get('CMF', [0.325,0.325])
         self.set_CMF(a=CMF[0], b=CMF[1])
         self._save_parameters = ['Mass','Radius','WMF','CMF']
+        self.type = 'water'
+        self.Points, self.Radius_Data = load_Data(self.type) # load interpolation fits
 
     def run(self):
         '''
@@ -109,25 +112,27 @@ class water(exoplanet):
         self.MgMF: array
             Magnesium mass fraction
         '''
-        get_R = lambda x: interpn(PointsWater, Radius_DataWater, x) # x=wmf,Mass,cmf   
-        self._check_water(get_R)
+        get_R = lambda x: interpn(self.Points, self.Radius_Data, x) # x=wmf,Mass,cmf   
+        self._check(get_R)
         args = np.asarray([self.Radius,self.Mass,self.CMF]).T
-        residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],param[1],param[2]*(1-x[0])]).T))**2/1e-4 
+        residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],param[1],param[2]]).T))**2/1e-6
         self.WMF = self._run_MC(residual,args)
         self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=0.,xFe=0.,xWu=0.2)
 
 class envelope(exoplanet):
-    def __init__(self, Mass=[1,0.001], Radius=[1,0.001], atm_height=[20,30], N=50000, **kwargs):
+    def __init__(self, Mass=[1,0.001], Radius=[1,0.001], N=50000, **kwargs):
         '''
-        Envelope planet method (beta). CMF and WMF will be ignored.
+        Envelope planet method (beta). WMF, xSi, xFe will be ignored.
+        The equilibrium temperature (Teq) is assumed parameter to be set. 
         '''
-        super().__init__(N, Mass, Radius, xSi, xFe, atm_height, **kwargs)
-        xSi = kwargs.get('xSi', [0,0.])
-        xFe = kwargs.get('xFe', [0,0.])
-        self.set_xSi(a=xSi[0], b=xSi[1])
-        self.set_xFe(a=xFe[0], b=xFe[1])
-        self.set_atm_height(a=atm_height[0], b=atm_height[1])
-        self._save_parameters = ['Mass','Radius','CMF','atm_height']
+        super().__init__(N, Mass, Radius, **kwargs)
+        CMF = kwargs.get('CMF', [0.325,0.325])
+        self.set_CMF(a=CMF[0], b=CMF[1])
+        Teq = kwargs.get('Teq', [1000,100])
+        self.set_Teq(mu=Teq[0], sigma=Teq[1])
+        self._save_parameters = ['Mass','Radius','AMF','CMF','Teq']
+        self.type = 'envelope'
+        self.Points, self.Radius_Data = load_Data(self.type) # load interpolation fits
 
     def run(self):
         '''
@@ -135,120 +140,138 @@ class envelope(exoplanet):
 
         Attributes:
         --------
+        self.AMF: array
+            Atmosphere mass fraction
         self.CMF: array
-            Core mass fraction
-        self.atm_height: array
-            Height of the atmosphere (km)
+            Rocky core mass fraction (rcmf = (1-amf)/cmf)
+        self.FeMF: array
+            Iron mass fraction
+        self.SiMF: array
+            Silicon mass fraction
+        self.MgMF: array
+            Magnesium mass fraction
         '''
-        get_R = lambda x: interpn(PointsRocky, Radius_DataRocky, x[:4].T)+x[4]/6.371e3 # x=cmf,Mass,xSi,xFe,atm_h
-        pos = (self.Mass>10**-0.5) & (self.Mass<10**1.3)
-        for item in  ['Mass','Radius','xSi','xFe','atm_height']:
-            setattr(self, item, getattr(self, item)[pos])
-        args = np.asarray([self.Radius,self.Mass,self.xSi,self.xFe,self.atm_height])
-        residual = lambda x,param: np.sum(param[0]-_get_R(np.asarray([x[0],*param[1:]])))**2/1e-4 
-        self.CMF = self._run_MC(residual,args)
+        get_R = lambda x: interpn(self.Points, self.Radius_Data, x)
+        self._check(get_R)
+        args = np.asarray([self.Radius,self.Mass,self.CMF,self.Teq]).T
+        residual = lambda x,param: np.sum(param[0]-get_R(np.asarray([x[0],param[1],param[2],param[3]]).T))**2/1e-6
+        self.AMF = self._run_MC(residual,args)
+        self.FeMF,self.SiMF,self.MgMF,_,_,_ = chemistry(self.CMF,xSi=0.,xFe=0.,xWu=0.2)
     
-def get_radius(M,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
+def get_radius(M,cmf=0.325,wmf=None,amf=None,xSi=0,xFe=0.1,Teq=1000):
     '''
     Find the Radius of a planet, given mass and interior parameters.
     
     Parameters:
     -----------
-    M: float or array
+    M: float/array
         Mass of the planet in Earth masses, 
-        if array the same interior parameters will be used for all masses.
-    cmf: float
+        if array the interior paramaters need to be the same size as M.
+    cmf: float/array
         Core mass fraction. 
-    wmf: float
+    wmf: float/array
         Water mass fraction.
         xSi and xFe will be ignored and cmf corresponds to rocky portion only (rcmf).
         Thus rcmf is will keep the mantle to core fraction constant, rather than the total core mass.
-    xSi: float
+    amf: float/array
+        Atmosphere mass fraction.
+        If None, the planet is assumed to be rocky or water.
+    xSi: float/array
         Molar fraction of silicon in the core (between 0-0.2).
-    xFe: float
+    xFe: float/array
         Molar fraction of iron in the mantle (between 0-0.2).
+    Teq: float/array
+        Equilibrium temperature of the planet (K).
+        Only used if amf is not None, otherwise Teq=300K is assumed.
     
     Returns:
     --------
     Radius: float or array
         Radius of the planet in Earth radii.
     '''
-    rocky = True if wmf is None else False
-    
-    if isinstance(M, (list, np.ndarray)):
-        n = len(M)
-        wmf = np.full(n,wmf)
-        cmf = np.full(n,cmf)
-        xSi = np.full(n,xSi)
-        xFe = np.full(n,xFe)
-    
-    if rocky:
-        xi = np.asarray([cmf, M, xSi, xFe]).T
-        result = interpn(PointsRocky, Radius_DataRocky, xi)
+    M = np.asarray(M) if isinstance(M, (list, np.ndarray)) else np.array([M])
+    n = len(M)    
+    cmf = np.asarray(cmf) if isinstance(cmf, (list, np.ndarray)) else np.full(n, cmf)
+    if wmf is not None:
+        Points, Radius_Data = load_Data('water') # load interpolation fits
+        wmf = np.asarray(wmf) if isinstance(wmf, (list, np.ndarray)) else np.full(n, wmf) # if wmf is not an array, assume the same wmf for all masses
+        xi = np.asarray([wmf, M, cmf]).T
+    elif amf is not None:
+        Points, Radius_Data = load_Data('envelope')
+        amf = np.asarray(amf) if isinstance(amf, (list, np.ndarray)) else np.full(n, amf)
+        Teq = np.asarray(Teq) if isinstance(Teq, (list, np.ndarray)) else np.full(n, Teq)
+        xi = np.asarray([amf, M, cmf, Teq]).T
     else:
-        xi = np.asarray([wmf, M, cmf * (1 - wmf)]).T
-        result = interpn(PointsWater, Radius_DataWater, xi)
+        Points, Radius_Data = load_Data('rocky')
+        xSi = np.asarray(xSi) if isinstance(xSi, (list, np.ndarray)) else np.full(n, xSi)
+        xFe = np.asarray(xFe) if isinstance(xFe, (list, np.ndarray)) else np.full(n, xFe)
+        xi = np.asarray([cmf, M, xSi, xFe]).T
+
+    result = interpn(Points, Radius_Data, xi)
     return result if isinstance(M, (list, np.ndarray)) else result[0]
 
-def get_cmf(M,R,xSi=0,xFe=0.1):
+def get_interior(M,R,type=None,cmf=0.325,xSi=0,xFe=0.1,Teq=1000):
     '''
-    Find the Core Mass Fraction of a planet, given mass and radius.
-    
-    Parameters:
-    -----------
-    M: float or array
-        Mass of the planet in Earth masses, 
-    R: float or array
-        Radius of the planet in Earth radii.
-    xSi: float
-        Molar fraction of silicon in the core (between 0-0.2).
-    xFe: float
-        Molar fraction of iron in the mantle (between 0-0.2).
-    
-    Returns:
-    --------
-    cmf: float or array
-        Core mass fraction of the planet.
-    '''
-    residual = lambda x,param: (param[0]-get_radius(param[1],cmf=x,xSi=param[2],xFe=param[3]))**2/1e-4
-    if isinstance(M, (list, np.ndarray)):
-        res = []
-        for i in range(M):
-            args = [R[i],M[i],xSi,xFe]
-            res.append(minimize(residual,0.325,args=args,bounds=[[0,1]]).x[0])
-    else:
-        args = [R,M,xSi,xFe]
-        res = minimize(residual,0.325,args=args,bounds=[[0,1]]).x[0]
-    return res
-
-def get_wmf(M,R,cmf=0.325):
-    '''
-    Find the Water Mass Fraction of a planet, given mass and radius.
+    Find the interior parameters of a planet, given mass and radius.
 
     Parameters:
     -----------
-    M: float or array
+    M: float/array
         Mass of the planet in Earth masses,
-    R: float or array
+    R: float/array
         Radius of the planet in Earth radii.
-    cmf: float
-        Core mass fraction (rocky portion only).
+    type: str
+        Type of planet interior to assume. Options are 'rocky', 'water', 'envelope'.
+        If None, the function will first try to fit a rocky planet.
+    cmf: float/array
+        Core mass fraction. 
+        Only used if type is 'water' or 'envelope'.
+    xSi: float/array
+        Molar fraction of silicon in the core (between 0-0.2).
+        Only used if type is 'rocky'.
+    xFe: float/array
+        Molar fraction of iron in the mantle (between 0-0.2).
+        Only used if type is 'rocky'.
+    Teq: float/array
+        Equilibrium temperature of the planet (K).
+        Only used if type is 'envelope', otherwise Teq=300K is assumed.
     
     Returns:
     --------
-    wmf: float or array
-        Water mass fraction of the planet.
+    interior: float or array
+        Interior parameter of the planet.
+        If type is 'rocky', returns cmf.
+        If type is 'water', returns wmf.
+        If type is 'envelope', returns amf.
     '''
-    residual = lambda x,param: (param[0]-get_radius(param[1],cmf=param[2],wmf=x[0]))**2/1e-4
-    if isinstance(M, (list, np.ndarray)):
-        res = []
-        for i in range(M):
-            args = [R[i],M[i],cmf]
-            res.append(minimize(residual,0,args=args,bounds=[[0,1]]).x[0])
+
+    M = np.asarray(M) if isinstance(M, (list, np.ndarray)) else np.array([M])
+    R = np.asarray(R) if isinstance(R, (list, np.ndarray)) else np.array([R])
+    n = len(M)    
+    cmf = np.asarray(cmf) if isinstance(cmf, (list, np.ndarray)) else np.full(n, cmf)
+    xSi = np.asarray(xSi) if isinstance(xSi, (list, np.ndarray)) else np.full(n, xSi)
+    xFe = np.asarray(xFe) if isinstance(xFe, (list, np.ndarray)) else np.full(n, xFe)
+    Teq = np.asarray(Teq) if isinstance(Teq, (list, np.ndarray)) else np.full(n, Teq)
+
+    if type=='rocky' or type is None:
+        Points, Radius_Data = load_Data('water') # load interpolation fits
+        residual = lambda x,param: (param[0]-get_radius(param[1],cmf=x,xSi=param[2],xFe=param[3]))**2/1e-6
+        args = np.asarray([R,M,xSi,xFe]).T
+    elif type=='water':
+        Points, Radius_Data = load_Data('water') # load interpolation fits
+        residual = lambda x,param: (param[0]-get_radius(param[1],cmf=param[2],wmf=x))**2/1e-6
+        args = np.asarray([R,M,cmf]).T
+    elif type=='envelope':
+        Points, Radius_Data = load_Data('envelope') # load interpolation fits
+        residual = lambda x,param: (param[0]-get_radius(param[1],cmf=param[2],amf=x))**2/1e-6
+        args = np.asarray([R,M,cmf,Teq]).T
     else:
-        args = [R,M,cmf]
-        res = minimize(residual,0,args=args,bounds=[[0,1]]).x[0]
-    return res
+        raise ValueError("type must be 'rocky', 'water', 'envelope' or None")
+    
+    res = []
+    for i in range(n):
+        res.append(minimize(residual,0.325,args=args[i],bounds=[[0,1]]).x[0])
+    return res if n>1 else res[0]
 
 def get_rhoe(M,R, **kwargs):
     '''
@@ -269,14 +292,14 @@ def get_rhoe(M,R, **kwargs):
     '''
     if not kwargs:
         kwargs = {'cmf': 0.325, 'xSi': 0.2, 'xFe': 0.05}
-    if isinstance(M, (list, np.ndarray)):
-        rhoe = np.zeros(len(M))
-        for i in range(len(M)):
-            r_earth = get_radius(M[i],**kwargs)
-            rhoe[i] = (r_earth/R[i])**3
-    else:
-        r_earth = get_radius(M,**kwargs)
-        rhoe = (r_earth/R)**3
+    # if isinstance(M, (list, np.ndarray)):
+    #     rhoe = np.zeros(len(M))
+    #     # for i in range(len(M)):
+    #     r_earth = get_radius(M,**kwargs)
+    #     rhoe[i] = (r_earth/R)**3
+    # else:
+    r_earth = get_radius(M,**kwargs)
+    rhoe = (r_earth/R)**3
     return rhoe
 
 def get_mass(R,cmf=0.325,wmf=None,xSi=0,xFe=0.1):
